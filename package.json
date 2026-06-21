@@ -1,0 +1,47 @@
+{
+  "name": "opencode-tor-plugin",
+  "version": "1.0.0",
+  "description": "OpenCode plugin that routes outbound HTTP(S) requests through the Tor SOCKS5 proxy",
+  "type": "module",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "opencode",
+    "plugin",
+    "tor",
+    "socks5",
+    "proxy",
+    "privacy",
+    "anonymity"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "opencode": ">=1.0.0"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=1.0.0"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "^1.3.3",
+    "typescript": "^5.4.0",
+    "vitest": "^2.0.0"
+  }
+}
