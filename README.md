@@ -35,7 +35,8 @@ The plugin starts enabled by default. Use chat commands to control it:
 - `@tor on` — route outbound HTTP(S) requests through Tor
 - `@tor off` — disable Tor routing
 - `@tor status` — show current state and proxy URL
-- `@tor test` — check whether the configured SOCKS5 proxy is reachable
+- `@tor test` — check whether the configured SOCKS5 proxy port is reachable
+- `@tor verify` — fetch your public IP directly and through the proxy to confirm traffic is routing through Tor
 - `@tor proxy <url>` — set a custom SOCKS5 proxy URL
 
 ## How it works
