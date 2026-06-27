@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
-import { createCommandHandler } from '../src/commands.js'
+import { createChatMessageHandler, createCommandHandler } from '../src/commands.js'
 import type { TorConfig } from '../src/config.js'
+import type { ChatMessageInput, ChatMessageOutput, TextPart } from '../src/commands.js'
 
 function makeConfig(overrides: Partial<TorConfig> = {}): TorConfig {
   return {
@@ -16,6 +17,33 @@ function makeEvent(content: string): { event: { type: string; data?: unknown } }
       type: 'chat.message',
       data: { message: { content, role: 'user' } },
     },
+  }
+}
+
+function makeChatInput(content: string): { input: ChatMessageInput; output: ChatMessageOutput } {
+  const message: UserMessage = {
+    id: 'msg-1',
+    sessionID: 'sess-1',
+    role: 'user',
+    time: { created: Date.now() },
+    agent: 'agent-1',
+    model: { providerID: 'provider-1', modelID: 'model-1' },
+    summary: { title: '', body: '', diffs: [] },
+    system: '',
+    tools: {},
+  }
+  const parts: TextPart[] = [
+    {
+      id: 'part-1',
+      sessionID: 'sess-1',
+      messageID: 'msg-1',
+      type: 'text',
+      text: content,
+    },
+  ]
+  return {
+    input: { sessionID: 'sess-1' },
+    output: { message, parts },
   }
 }
 
@@ -173,5 +201,120 @@ describe('createCommandHandler', () => {
 
     logSpy.mockRestore()
     vi.unstubAllGlobals()
+  })
+})
+
+describe('createChatMessageHandler', () => {
+  it('ignores messages that are not @tor commands', async () => {
+    const config = makeConfig()
+    const save = vi.fn()
+    const handler = createChatMessageHandler(config, save)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const { input, output } = makeChatInput('hello world')
+
+    await handler(input, output)
+
+    expect(save).not.toHaveBeenCalled()
+    expect(logSpy).not.toHaveBeenCalled()
+    expect(output.parts[0]?.ignored).toBeUndefined()
+
+    logSpy.mockRestore()
+  })
+
+  it('does not treat @torch or @torrent as @tor commands', async () => {
+    const config = makeConfig()
+    const save = vi.fn()
+    const handler = createChatMessageHandler(config, save)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await handler(...Object.values(makeChatInput('@torch search')))
+    await handler(...Object.values(makeChatInput('@torrent download')))
+
+    expect(save).not.toHaveBeenCalled()
+    expect(logSpy).not.toHaveBeenCalled()
+
+    logSpy.mockRestore()
+  })
+
+  it('handles @tor on and marks parts ignored', async () => {
+    const config = makeConfig()
+    const save = vi.fn()
+    const handler = createChatMessageHandler(config, save)
+
+    const { input, output } = makeChatInput('@tor on')
+    await handler(input, output)
+
+    expect(config.enabled).toBe(true)
+    expect(save).toHaveBeenCalledOnce()
+    expect(output.parts.every((part) => part.ignored)).toBe(true)
+  })
+
+  it('handles @tor off and marks parts ignored', async () => {
+    const config = makeConfig({ enabled: true })
+    const save = vi.fn()
+    const handler = createChatMessageHandler(config, save)
+
+    const { input, output } = makeChatInput('@tor off')
+    await handler(input, output)
+
+    expect(config.enabled).toBe(false)
+    expect(save).toHaveBeenCalledOnce()
+    expect(output.parts.every((part) => part.ignored)).toBe(true)
+  })
+
+  it('shows status via chat.message hook', async () => {
+    const config = makeConfig()
+    const save = vi.fn()
+    const handler = createChatMessageHandler(config, save)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    const { input, output } = makeChatInput('@tor status')
+    await handler(input, output)
+
+    expect(save).not.toHaveBeenCalled()
+    expect(logSpy.mock.calls[0]?.[0]).toContain('disabled via')
+    expect(output.parts.every((part) => part.ignored)).toBe(true)
+
+    logSpy.mockRestore()
+  })
+
+  it('reports proxy as reachable for @tor test via chat.message hook', async () => {
+    const config = makeConfig()
+    const save = vi.fn()
+    const handler = createChatMessageHandler(config, save, { checkProxy: async () => true })
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    const { input, output } = makeChatInput('@tor test')
+    await handler(input, output)
+
+    expect(save).not.toHaveBeenCalled()
+    expect(logSpy).toHaveBeenCalledTimes(1)
+    expect(logSpy.mock.calls[0]?.[0]).toContain('reachable')
+    expect(output.parts.every((part) => part.ignored)).toBe(true)
+
+    logSpy.mockRestore()
+  })
+
+  it('concatenates text from multiple parts to build the command', async () => {
+    const config = makeConfig()
+    const save = vi.fn()
+    const handler = createChatMessageHandler(config, save)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    const { input, output } = makeChatInput('@tor ')
+    output.parts.push({
+      id: 'part-2',
+      sessionID: 'sess-1',
+      messageID: 'msg-1',
+      type: 'text',
+      text: 'status',
+    })
+
+    await handler(input, output)
+
+    expect(logSpy.mock.calls[0]?.[0]).toContain('disabled via')
+    expect(output.parts.every((part) => part.ignored)).toBe(true)
+
+    logSpy.mockRestore()
   })
 })

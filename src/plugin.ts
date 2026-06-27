@@ -1,6 +1,6 @@
 import type { Plugin } from '@opencode-ai/plugin'
 import { loadConfig } from './config.js'
-import { createCommandHandler } from './commands.js'
+import { createChatMessageHandler, createCommandHandler } from './commands.js'
 import { installTorFetch } from './proxy.js'
 
 export const TorPlugin: Plugin = async ({ project, client }) => {
@@ -22,8 +22,11 @@ export const TorPlugin: Plugin = async ({ project, client }) => {
     console.log(`[opencode-tor-plugin] ${logMessage}`)
   }
 
+  const commandOptions = { originalFetch }
+
   return {
-    event: createCommandHandler(config, save, { originalFetch }),
+    event: createCommandHandler(config, save, commandOptions),
+    'chat.message': createChatMessageHandler(config, save, commandOptions),
   }
 }
 

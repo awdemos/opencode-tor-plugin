@@ -1,6 +1,6 @@
 {
   "name": "opencode-tor-plugin",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "OpenCode plugin that routes outbound HTTP(S) requests through the Tor SOCKS5 proxy",
   "type": "module",
   "main": "./dist/index.js",

@@ -111,7 +111,7 @@ Settings are stored in your project's OpenCode config under the `tor` key:
 
 ## npm package
 
-Published as [`opencode-tor-plugin`](https://www.npmjs.com/package/opencode-tor-plugin) at version `1.0.0`. Because the plugin's core routing behavior changed in this release (Bun native proxy option replaced with `netbun`), the next publish should bump the package version.
+Published as [`opencode-tor-plugin`](https://www.npmjs.com/package/opencode-tor-plugin). Current version: `1.2.0`.
 
 ## License
 
