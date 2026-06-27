@@ -36,18 +36,26 @@ async function fetchIp(
   }
 }
 
+interface EventPayload {
+  event: {
+    type: string
+    data?: unknown
+  }
+}
+
 export function createCommandHandler(
   config: TorConfig,
   save: () => Promise<void>,
   options: { checkProxy?: (proxy: string) => Promise<boolean>; fetcher?: typeof fetch } = {},
-): (input: { event: { type: string; data?: unknown } }) => Promise<void> {
+): (payload: EventPayload) => Promise<void> {
   const checkProxy = options.checkProxy ?? isProxyReachable
   const fetcher = options.fetcher ?? globalThis.fetch
 
-  return async function handleTorCommand(input: { event: { type: string; data?: unknown } }) {
-    if (input.event.type !== 'chat.message') return
+  return async function handleTorCommand(payload: EventPayload) {
+    const { event } = payload
+    if (event.type !== 'chat.message') return
 
-    const data = input.event.data as ChatMessageEventData | undefined
+    const data = event.data as ChatMessageEventData | undefined
     const content = (data?.message?.content ?? '').trim()
     if (!/^@tor(?:\s+|$)/.test(content)) return
 

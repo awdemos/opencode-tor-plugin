@@ -3,12 +3,18 @@ import { loadConfig } from './config.js'
 import { createCommandHandler } from './commands.js'
 import { installTorFetch } from './proxy.js'
 
-export const TorPlugin: Plugin = async ({ project }) => {
+export const TorPlugin: Plugin = async ({ project, client }) => {
   const { config, save } = loadConfig(project)
 
   installTorFetch(config)
 
-  console.log(`[opencode-tor-plugin] loaded (tor ${config.enabled ? 'enabled' : 'disabled'} via ${config.proxy})`)
+  await client.app.log({
+    body: {
+      service: 'opencode-tor-plugin',
+      level: 'info',
+      message: `loaded (tor ${config.enabled ? 'enabled' : 'disabled'} via ${config.proxy})`,
+    },
+  })
 
   return {
     event: createCommandHandler(config, save),
