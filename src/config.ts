@@ -23,7 +23,7 @@ export function loadConfig(project: Project): { config: TorConfig; save: () => P
   const torConfig = (projectConfig.tor ??= {}) as Record<string, unknown>
 
   if (typeof torConfig.enabled !== 'boolean') {
-    torConfig.enabled = false
+    torConfig.enabled = true
   }
   if (typeof torConfig.proxy !== 'string' || torConfig.proxy.length === 0) {
     torConfig.proxy = DEFAULT_PROXY
@@ -35,4 +35,61 @@ export function loadConfig(project: Project): { config: TorConfig; save: () => P
       await runtimeProject.saveConfig?.()
     },
   }
+}
+
+/**
+ * Parses a SOCKS5 proxy URL and returns the host/port for reachability checks.
+ * Returns null if the URL is malformed or uses an unsupported scheme.
+ */
+export function parseProxyUrl(proxy: string): { host: string; port: number } | null {
+  try {
+    const url = new URL(proxy)
+    if (url.protocol !== 'socks5:' && url.protocol !== 'socks5h:') {
+      return null
+    }
+    const port = Number(url.port)
+    if (!url.hostname || Number.isNaN(port) || port <= 0 || port > 65535) {
+      return null
+    }
+    return { host: url.hostname, port }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Quickly checks whether the SOCKS5 proxy port is reachable.
+ * Resolves true on connection, false on error or timeout.
+ */
+export async function isProxyReachable(
+  proxy: string,
+  timeoutMs = 3000,
+): Promise<boolean> {
+  const parsed = parseProxyUrl(proxy)
+  if (!parsed) return false
+
+  const { host, port } = parsed
+  const socket = await import('node:net')
+    .then(({ default: net }) => net)
+    .catch(() => null)
+  if (!socket) return false
+
+  return new Promise((resolve) => {
+    const conn = socket.connect({ host, port })
+    const timer = setTimeout(() => {
+      conn.destroy()
+      resolve(false)
+    }, timeoutMs)
+
+    conn.once('connect', () => {
+      clearTimeout(timer)
+      conn.destroy()
+      resolve(true)
+    })
+
+    conn.once('error', () => {
+      clearTimeout(timer)
+      resolve(false)
+    })
+  })
 }

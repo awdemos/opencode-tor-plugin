@@ -90,4 +90,34 @@ describe('createCommandHandler', () => {
 
     logSpy.mockRestore()
   })
+
+  it('reports proxy as reachable for @tor test', async () => {
+    const config = makeConfig()
+    const save = vi.fn()
+    const handler = createCommandHandler(config, save, { checkProxy: async () => true })
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await handler(makeEvent('@tor test'))
+
+    expect(save).not.toHaveBeenCalled()
+    expect(logSpy).toHaveBeenCalledTimes(1)
+    expect(logSpy.mock.calls[0]?.[0]).toContain('reachable')
+
+    logSpy.mockRestore()
+  })
+
+  it('reports proxy as unreachable for @tor test', async () => {
+    const config = makeConfig()
+    const save = vi.fn()
+    const handler = createCommandHandler(config, save, { checkProxy: async () => false })
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await handler(makeEvent('@tor test'))
+
+    expect(save).not.toHaveBeenCalled()
+    expect(logSpy).toHaveBeenCalledTimes(1)
+    expect(logSpy.mock.calls[0]?.[0]).toContain('unreachable')
+
+    logSpy.mockRestore()
+  })
 })

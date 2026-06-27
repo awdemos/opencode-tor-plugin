@@ -1,4 +1,4 @@
-import type { TorConfig } from './config.js'
+import { isProxyReachable, type TorConfig } from './config.js'
 
 interface BunRequestInit extends RequestInit {
   /** Bun-specific fetch option for SOCKS5/HTTP proxy routing. */
@@ -24,15 +24,12 @@ function parseIpv4(address: string): [number, number, number, number] | null {
 
 function isPrivateOrLocalHostname(hostname: string): boolean {
   let lower = hostname.toLowerCase()
-  // Strip IPv6 brackets: new URL('http://[::1]:4096/api').hostname returns '[::1]'
   if (lower.startsWith('[') && lower.endsWith(']')) {
     lower = lower.slice(1, -1)
   }
 
   if (lower === 'localhost' || lower === '::1') return true
 
-  // Only treat actual IPv4 literals as local/private; domain names that happen
-  // to start with the same digits (e.g. "10.example.com") must route normally.
   const octets = parseIpv4(lower)
   if (octets) {
     const [a, b] = octets
@@ -44,7 +41,6 @@ function isPrivateOrLocalHostname(hostname: string): boolean {
     return false
   }
 
-  // Only treat actual IPv6 literals as local/private; hostnames cannot contain ':'.
   if (lower.includes(':')) {
     if (lower.startsWith('fc') || lower.startsWith('fd')) return true
     if (lower.startsWith('fe80:')) return true
@@ -61,7 +57,12 @@ export function shouldRouteThroughProxy(url: URL): boolean {
 export function createTorFetch(
   config: TorConfig,
   originalFetch: typeof fetch,
+  options: { checkProxy?: (proxy: string) => Promise<boolean> } = {},
 ): typeof fetch {
+  const checkProxy = options.checkProxy ?? isProxyReachable
+  let proxyReachable: boolean | undefined
+  let warned = false
+
   return async function torFetch(input, init?) {
     if (!config.enabled) {
       return originalFetch(input, init)
@@ -72,7 +73,21 @@ export function createTorFetch(
       return originalFetch(input, init)
     }
 
-    const bunInit: BunRequestInit = { ...init, proxy: (init as BunRequestInit | undefined)?.proxy ?? config.proxy }
+    const desiredProxy = (init as BunRequestInit | undefined)?.proxy ?? config.proxy
+
+    if (proxyReachable === undefined) {
+      proxyReachable = await checkProxy(desiredProxy)
+    }
+
+    if (!proxyReachable) {
+      if (!warned) {
+        console.warn(`[tor] proxy ${desiredProxy} is unreachable; falling back to direct routing`)
+        warned = true
+      }
+      return originalFetch(input, init)
+    }
+
+    const bunInit: BunRequestInit = { ...init, proxy: desiredProxy }
     return originalFetch(input, bunInit)
   }
 }

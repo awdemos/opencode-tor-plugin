@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { createTorFetch, shouldRouteThroughProxy } from '../src/proxy.js'
+import { isProxyReachable, parseProxyUrl } from '../src/config.js'
 import type { TorConfig } from '../src/config.js'
 
 const PROXY = 'socks5h://127.0.0.1:9050'
@@ -55,10 +56,10 @@ describe('createTorFetch', () => {
     expect(mockFetch.mock.calls[0]?.[1]).toBeUndefined()
   })
 
-  it('injects proxy for remote HTTP(S) requests when enabled', async () => {
+  it('injects proxy for remote HTTP(S) requests when enabled and reachable', async () => {
     const config = makeConfig({ enabled: true })
     const mockFetch = makeMockFetch()
-    const torFetch = createTorFetch(config, mockFetch)
+    const torFetch = createTorFetch(config, mockFetch, { checkProxy: async () => true })
 
     await torFetch('https://api.openai.com/v1/chat/completions')
 
@@ -67,10 +68,30 @@ describe('createTorFetch', () => {
     expect(init?.proxy).toBe(PROXY)
   })
 
+  it('falls back to direct routing when proxy is unreachable', async () => {
+    const config = makeConfig({ enabled: true })
+    const mockFetch = makeMockFetch()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const torFetch = createTorFetch(config, mockFetch, { checkProxy: async () => false })
+
+    await torFetch('https://example.com')
+    await torFetch('https://api.openai.com/v1/chat/completions')
+
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+    for (const call of mockFetch.mock.calls) {
+      const init = call[1] as { proxy?: string } | undefined
+      expect(init?.proxy).toBeUndefined()
+    }
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+    expect(warnSpy.mock.calls[0]?.[0]).toContain('unreachable')
+
+    warnSpy.mockRestore()
+  })
+
   it('does not route ftp: or file: requests', async () => {
     const config = makeConfig({ enabled: true })
     const mockFetch = makeMockFetch()
-    const torFetch = createTorFetch(config, mockFetch)
+    const torFetch = createTorFetch(config, mockFetch, { checkProxy: async () => true })
 
     await torFetch('ftp://example.com/file')
     await torFetch('file:///etc/passwd')
@@ -85,7 +106,7 @@ describe('createTorFetch', () => {
   it('does not inject proxy for localhost', async () => {
     const config = makeConfig({ enabled: true })
     const mockFetch = makeMockFetch()
-    const torFetch = createTorFetch(config, mockFetch)
+    const torFetch = createTorFetch(config, mockFetch, { checkProxy: async () => true })
 
     await torFetch('http://localhost:4096/api')
 
@@ -97,7 +118,7 @@ describe('createTorFetch', () => {
   it('preserves existing proxy in init', async () => {
     const config = makeConfig({ enabled: true, proxy: PROXY })
     const mockFetch = makeMockFetch()
-    const torFetch = createTorFetch(config, mockFetch)
+    const torFetch = createTorFetch(config, mockFetch, { checkProxy: async () => true })
 
     await torFetch('https://example.com', { proxy: 'socks5h://127.0.0.1:9150' } as RequestInit)
 
@@ -108,11 +129,33 @@ describe('createTorFetch', () => {
   it('handles Request input objects', async () => {
     const config = makeConfig({ enabled: true })
     const mockFetch = makeMockFetch()
-    const torFetch = createTorFetch(config, mockFetch)
+    const torFetch = createTorFetch(config, mockFetch, { checkProxy: async () => true })
 
     await torFetch(new Request('https://example.com'))
 
     const init = mockFetch.mock.calls[0]?.[1] as { proxy?: string } | undefined
     expect(init?.proxy).toBe(PROXY)
+  })
+})
+
+describe('parseProxyUrl', () => {
+  it.each([
+    ['socks5h://127.0.0.1:9050', { host: '127.0.0.1', port: 9050 }],
+    ['socks5://localhost:9150', { host: 'localhost', port: 9150 }],
+    ['http://127.0.0.1:9050', null],
+    ['not-a-url', null],
+  ])('for %s returns %s', (input, expected) => {
+    expect(parseProxyUrl(input)).toEqual(expected)
+  })
+})
+
+describe('isProxyReachable', () => {
+  it('returns false for malformed proxy URLs', async () => {
+    expect(await isProxyReachable('not-a-proxy')).toBe(false)
+    expect(await isProxyReachable('http://127.0.0.1:9050')).toBe(false)
+  })
+
+  it('returns false when port is not listening', async () => {
+    expect(await isProxyReachable('socks5h://127.0.0.1:1', 100)).toBe(false)
   })
 })

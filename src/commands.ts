@@ -1,4 +1,4 @@
-import type { TorConfig } from './config.js'
+import { isProxyReachable, type TorConfig } from './config.js'
 
 interface ChatMessageEventData {
   message?: {
@@ -10,7 +10,10 @@ interface ChatMessageEventData {
 export function createCommandHandler(
   config: TorConfig,
   save: () => Promise<void>,
+  options: { checkProxy?: (proxy: string) => Promise<boolean> } = {},
 ): (input: { event: { type: string; data?: unknown } }) => Promise<void> {
+  const checkProxy = options.checkProxy ?? isProxyReachable
+
   return async function handleTorCommand(input: { event: { type: string; data?: unknown } }) {
     if (input.event.type !== 'chat.message') return
 
@@ -48,8 +51,17 @@ export function createCommandHandler(
         }
         break
       }
+      case 'test': {
+        const reachable = await checkProxy(config.proxy)
+        if (reachable) {
+          console.log(`[tor] proxy ${config.proxy} is reachable`)
+        } else {
+          console.log(`[tor] proxy ${config.proxy} is unreachable — outbound requests will fall back to direct routing`)
+        }
+        break
+      }
       default: {
-        console.log('[tor] usage: @tor on | off | status | proxy <socks5-url>')
+        console.log('[tor] usage: @tor on | off | status | test | proxy <socks5-url>')
         console.log('[tor] example: @tor proxy socks5h://127.0.0.1:9050')
       }
     }
