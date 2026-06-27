@@ -17,6 +17,10 @@ function makeMockFetch(): ReturnType<typeof vi.fn<typeof fetch>> {
   return vi.fn<typeof fetch>(async (_input, _init) => new Response('ok'))
 }
 
+function makeMockSocksFetch(): ReturnType<typeof vi.fn<typeof fetch>> {
+  return vi.fn<typeof fetch>(async (_input, _init) => new Response('ok'))
+}
+
 describe('shouldRouteThroughProxy', () => {
   it.each([
     ['https://api.openai.com/v1/chat/completions', true],
@@ -56,27 +60,31 @@ describe('createTorFetch', () => {
     expect(mockFetch.mock.calls[0]?.[1]).toBeUndefined()
   })
 
-  it('injects proxy for remote HTTP(S) requests when enabled and reachable', async () => {
+  it('routes remote HTTP(S) requests through SOCKS5 fetch when enabled and reachable', async () => {
     const config = makeConfig({ enabled: true })
     const mockFetch = makeMockFetch()
-    const torFetch = createTorFetch(config, mockFetch, { checkProxy: async () => true })
+    const mockSocksFetch = makeMockSocksFetch()
+    const torFetch = createTorFetch(config, mockFetch, { checkProxy: async () => true, socksFetch: mockSocksFetch })
 
     await torFetch('https://api.openai.com/v1/chat/completions')
 
-    expect(mockFetch).toHaveBeenCalledTimes(1)
-    const init = mockFetch.mock.calls[0]?.[1] as { proxy?: string } | undefined
-    expect(init?.proxy).toBe(PROXY)
+    expect(mockSocksFetch).toHaveBeenCalledTimes(1)
+    expect(mockFetch).not.toHaveBeenCalled()
+    const init = mockSocksFetch.mock.calls[0]?.[1] as { proxy?: { url: string; resolveDnsLocally: boolean } } | undefined
+    expect(init?.proxy).toEqual({ url: 'socks5://127.0.0.1:9050', resolveDnsLocally: false })
   })
 
   it('falls back to direct routing when proxy is unreachable', async () => {
     const config = makeConfig({ enabled: true })
     const mockFetch = makeMockFetch()
+    const mockSocksFetch = makeMockSocksFetch()
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const torFetch = createTorFetch(config, mockFetch, { checkProxy: async () => false })
+    const torFetch = createTorFetch(config, mockFetch, { checkProxy: async () => false, socksFetch: mockSocksFetch })
 
     await torFetch('https://example.com')
     await torFetch('https://api.openai.com/v1/chat/completions')
 
+    expect(mockSocksFetch).not.toHaveBeenCalled()
     expect(mockFetch).toHaveBeenCalledTimes(2)
     for (const call of mockFetch.mock.calls) {
       const init = call[1] as { proxy?: string } | undefined
@@ -91,11 +99,13 @@ describe('createTorFetch', () => {
   it('does not route ftp: or file: requests', async () => {
     const config = makeConfig({ enabled: true })
     const mockFetch = makeMockFetch()
-    const torFetch = createTorFetch(config, mockFetch, { checkProxy: async () => true })
+    const mockSocksFetch = makeMockSocksFetch()
+    const torFetch = createTorFetch(config, mockFetch, { checkProxy: async () => true, socksFetch: mockSocksFetch })
 
     await torFetch('ftp://example.com/file')
     await torFetch('file:///etc/passwd')
 
+    expect(mockSocksFetch).not.toHaveBeenCalled()
     expect(mockFetch).toHaveBeenCalledTimes(2)
     for (const call of mockFetch.mock.calls) {
       const init = call[1] as { proxy?: string } | undefined
@@ -106,10 +116,12 @@ describe('createTorFetch', () => {
   it('does not inject proxy for localhost', async () => {
     const config = makeConfig({ enabled: true })
     const mockFetch = makeMockFetch()
-    const torFetch = createTorFetch(config, mockFetch, { checkProxy: async () => true })
+    const mockSocksFetch = makeMockSocksFetch()
+    const torFetch = createTorFetch(config, mockFetch, { checkProxy: async () => true, socksFetch: mockSocksFetch })
 
     await torFetch('http://localhost:4096/api')
 
+    expect(mockSocksFetch).not.toHaveBeenCalled()
     expect(mockFetch).toHaveBeenCalledTimes(1)
     const init = mockFetch.mock.calls[0]?.[1] as { proxy?: string } | undefined
     expect(init?.proxy).toBeUndefined()
@@ -118,23 +130,29 @@ describe('createTorFetch', () => {
   it('preserves existing proxy in init', async () => {
     const config = makeConfig({ enabled: true, proxy: PROXY })
     const mockFetch = makeMockFetch()
-    const torFetch = createTorFetch(config, mockFetch, { checkProxy: async () => true })
+    const mockSocksFetch = makeMockSocksFetch()
+    const torFetch = createTorFetch(config, mockFetch, { checkProxy: async () => true, socksFetch: mockSocksFetch })
 
     await torFetch('https://example.com', { proxy: 'socks5h://127.0.0.1:9150' } as RequestInit)
 
-    const init = mockFetch.mock.calls[0]?.[1] as { proxy?: string } | undefined
-    expect(init?.proxy).toBe('socks5h://127.0.0.1:9150')
+    expect(mockFetch).not.toHaveBeenCalled()
+    expect(mockSocksFetch).toHaveBeenCalledTimes(1)
+    const init = mockSocksFetch.mock.calls[0]?.[1] as { proxy?: { url: string; resolveDnsLocally: boolean } } | undefined
+    expect(init?.proxy).toEqual({ url: 'socks5://127.0.0.1:9150', resolveDnsLocally: false })
   })
 
   it('handles Request input objects', async () => {
     const config = makeConfig({ enabled: true })
     const mockFetch = makeMockFetch()
-    const torFetch = createTorFetch(config, mockFetch, { checkProxy: async () => true })
+    const mockSocksFetch = makeMockSocksFetch()
+    const torFetch = createTorFetch(config, mockFetch, { checkProxy: async () => true, socksFetch: mockSocksFetch })
 
     await torFetch(new Request('https://example.com'))
 
-    const init = mockFetch.mock.calls[0]?.[1] as { proxy?: string } | undefined
-    expect(init?.proxy).toBe(PROXY)
+    expect(mockFetch).not.toHaveBeenCalled()
+    expect(mockSocksFetch).toHaveBeenCalledTimes(1)
+    const init = mockSocksFetch.mock.calls[0]?.[1] as { proxy?: { url: string; resolveDnsLocally: boolean } } | undefined
+    expect(init?.proxy).toEqual({ url: 'socks5://127.0.0.1:9050', resolveDnsLocally: false })
   })
 })
 

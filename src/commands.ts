@@ -1,10 +1,5 @@
 import { isProxyReachable, type TorConfig } from './config.js'
 
-interface BunRequestInit extends RequestInit {
-  /** Bun-specific fetch option for SOCKS5/HTTP proxy routing. */
-  proxy?: string
-}
-
 interface ChatMessageEventData {
   message?: {
     content?: string
@@ -16,16 +11,13 @@ const IP_ECHO_URL = 'https://icanhazip.com'
 
 async function fetchIp(
   fetcher: typeof fetch,
-  proxy: string | undefined,
   timeoutMs = 10000,
 ): Promise<string | null> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
-    const init: BunRequestInit = { signal: controller.signal }
-    if (proxy) init.proxy = proxy
-    const response = await fetcher(IP_ECHO_URL, init)
+    const response = await fetcher(IP_ECHO_URL, { signal: controller.signal })
     if (!response.ok) return null
     const text = (await response.text()).trim()
     return text || null
@@ -46,10 +38,10 @@ interface EventPayload {
 export function createCommandHandler(
   config: TorConfig,
   save: () => Promise<void>,
-  options: { checkProxy?: (proxy: string) => Promise<boolean>; fetcher?: typeof fetch } = {},
+  options: { checkProxy?: (proxy: string) => Promise<boolean>; originalFetch?: typeof fetch } = {},
 ): (payload: EventPayload) => Promise<void> {
   const checkProxy = options.checkProxy ?? isProxyReachable
-  const fetcher = options.fetcher ?? globalThis.fetch
+  const originalFetch = options.originalFetch ?? globalThis.fetch
 
   return async function handleTorCommand(payload: EventPayload) {
     const { event } = payload
@@ -99,8 +91,8 @@ export function createCommandHandler(
         break
       }
       case 'verify': {
-        const directIp = await fetchIp(fetcher, undefined)
-        const proxiedIp = await fetchIp(fetcher, config.proxy)
+        const directIp = await fetchIp(originalFetch)
+        const proxiedIp = await fetchIp(globalThis.fetch)
 
         if (!directIp && !proxiedIp) {
           console.log('[tor] verify failed: could not determine either IP address')

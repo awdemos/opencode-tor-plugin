@@ -124,32 +124,30 @@ describe('createCommandHandler', () => {
   it('verifies Tor routing when direct and proxied IPs differ', async () => {
     const config = makeConfig()
     const save = vi.fn()
-    const fetcher = vi.fn(
-      async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-        const proxy = (init as { proxy?: string } | undefined)?.proxy
-        const body = proxy ? '1.2.3.4\n' : '9.8.7.6\n'
-        return new Response(body)
-      },
-    )
-    const handler = createCommandHandler(config, save, { fetcher })
+    const originalFetch = vi.fn(async (): Promise<Response> => new Response('9.8.7.6\n'))
+    const torFetch = vi.fn(async (): Promise<Response> => new Response('1.2.3.4\n'))
+    vi.stubGlobal('fetch', torFetch)
+    const handler = createCommandHandler(config, save, { originalFetch })
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await handler(makeEvent('@tor verify'))
 
     expect(save).not.toHaveBeenCalled()
-    expect(fetcher).toHaveBeenCalledTimes(2)
-    expect(fetcher.mock.calls[0]?.[1]).not.toHaveProperty('proxy')
-    expect((fetcher.mock.calls[1]?.[1] as { proxy?: string } | undefined)?.proxy).toBe(config.proxy)
+    expect(originalFetch).toHaveBeenCalledTimes(1)
+    expect(torFetch).toHaveBeenCalledTimes(1)
     expect(logSpy.mock.calls.map((call) => call[0])).toContain('[tor] verify OK: traffic is routing through the proxy')
 
     logSpy.mockRestore()
+    vi.unstubAllGlobals()
   })
 
   it('warns when proxied IP matches direct IP', async () => {
     const config = makeConfig()
     const save = vi.fn()
-    const fetcher = vi.fn(async () => new Response('9.8.7.6\n'))
-    const handler = createCommandHandler(config, save, { fetcher })
+    const originalFetch = vi.fn(async (): Promise<Response> => new Response('9.8.7.6\n'))
+    const torFetch = vi.fn(async (): Promise<Response> => new Response('9.8.7.6\n'))
+    vi.stubGlobal('fetch', torFetch)
+    const handler = createCommandHandler(config, save, { originalFetch })
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await handler(makeEvent('@tor verify'))
@@ -157,13 +155,16 @@ describe('createCommandHandler', () => {
     expect(logSpy.mock.calls.map((call) => call[0])).toContain('[tor] verify warning: proxied IP matches direct IP — traffic may not be going through Tor')
 
     logSpy.mockRestore()
+    vi.unstubAllGlobals()
   })
 
   it('reports verify failure when both IP checks fail', async () => {
     const config = makeConfig()
     const save = vi.fn()
-    const fetcher = vi.fn(async () => new Response('', { status: 500 }))
-    const handler = createCommandHandler(config, save, { fetcher })
+    const originalFetch = vi.fn(async (): Promise<Response> => new Response('', { status: 500 }))
+    const torFetch = vi.fn(async (): Promise<Response> => new Response('', { status: 500 }))
+    vi.stubGlobal('fetch', torFetch)
+    const handler = createCommandHandler(config, save, { originalFetch })
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await handler(makeEvent('@tor verify'))
@@ -171,5 +172,6 @@ describe('createCommandHandler', () => {
     expect(logSpy.mock.calls.map((call) => call[0])).toContain('[tor] verify failed: could not determine either IP address')
 
     logSpy.mockRestore()
+    vi.unstubAllGlobals()
   })
 })

@@ -5,6 +5,7 @@ import { installTorFetch } from './proxy.js'
 
 export const TorPlugin: Plugin = async ({ project, client }) => {
   const { config, save } = loadConfig(project)
+  const originalFetch = globalThis.fetch
 
   installTorFetch(config)
 
@@ -22,7 +23,7 @@ export const TorPlugin: Plugin = async ({ project, client }) => {
   }
 
   return {
-    event: createCommandHandler(config, save),
+    event: createCommandHandler(config, save, { originalFetch }),
   }
 }
 

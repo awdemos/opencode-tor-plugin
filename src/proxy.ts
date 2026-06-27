@@ -1,8 +1,14 @@
+import { fetch as socksFetch } from 'netbun'
 import { isProxyReachable, type TorConfig } from './config.js'
 
-interface BunRequestInit extends RequestInit {
-  /** Bun-specific fetch option for SOCKS5/HTTP proxy routing. */
+interface UserSocksRequestInit extends RequestInit {
+  /** User-provided SOCKS5 proxy URL (e.g. socks5h://127.0.0.1:9050). */
   proxy?: string
+}
+
+interface NetbunSocksRequestInit extends RequestInit {
+  /** netbun proxy option: URL string or object with remote-DNS flag. */
+  proxy?: string | { url: string; resolveDnsLocally?: boolean }
 }
 
 function extractUrl(input: RequestInfo | URL): URL | null {
@@ -54,12 +60,27 @@ export function shouldRouteThroughProxy(url: URL): boolean {
   return !isPrivateOrLocalHostname(url.hostname)
 }
 
+function normalizeSocks5Proxy(proxy: string): { url: string; resolveDnsLocally: boolean } {
+  const url = proxy.replace(/^socks5h:\/\//, 'socks5://')
+  return { url, resolveDnsLocally: false }
+}
+
+function getDesiredProxy(init: UserSocksRequestInit | undefined, config: TorConfig): string {
+  return init?.proxy ?? config.proxy
+}
+
+export interface TorFetchOptions {
+  checkProxy?: (proxy: string) => Promise<boolean>
+  socksFetch?: typeof fetch
+}
+
 export function createTorFetch(
   config: TorConfig,
   originalFetch: typeof fetch,
-  options: { checkProxy?: (proxy: string) => Promise<boolean> } = {},
+  options: TorFetchOptions = {},
 ): typeof fetch {
   const checkProxy = options.checkProxy ?? isProxyReachable
+  const proxyFetch = options.socksFetch ?? socksFetch
   let proxyReachable: boolean | undefined
   let warned = false
 
@@ -73,7 +94,7 @@ export function createTorFetch(
       return originalFetch(input, init)
     }
 
-    const desiredProxy = (init as BunRequestInit | undefined)?.proxy ?? config.proxy
+    const desiredProxy = getDesiredProxy(init as UserSocksRequestInit | undefined, config)
 
     if (proxyReachable === undefined) {
       proxyReachable = await checkProxy(desiredProxy)
@@ -87,8 +108,8 @@ export function createTorFetch(
       return originalFetch(input, init)
     }
 
-    const bunInit: BunRequestInit = { ...init, proxy: desiredProxy }
-    return originalFetch(input, bunInit)
+    const socksInit: NetbunSocksRequestInit = { ...init, proxy: normalizeSocks5Proxy(desiredProxy) }
+    return proxyFetch(input, socksInit)
   }
 }
 

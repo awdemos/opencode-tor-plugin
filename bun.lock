@@ -4,6 +4,9 @@
   "workspaces": {
     "": {
       "name": "opencode-tor-plugin",
+      "dependencies": {
+        "netbun": "^0.4.1",
+      },
       "devDependencies": {
         "@opencode-ai/plugin": "^1.17.9",
         "@types/node": "^26.0.1",
@@ -201,6 +204,8 @@
     "multipasta": ["multipasta@0.2.7", "", {}, "sha512-KPA58d68KgGil15oDqXjkUBEBYc00XvbPj5/X+dyzeo/lWm9Nc25pQRlf1D+gv4OpK7NM0J1odrbu9JNNGvynA=="],
 
     "nanoid": ["nanoid@3.3.13", "", { "bin": { "nanoid": "bin/nanoid.cjs" } }, "sha512-sPdqC6ByMVVGvF1ynvvMo0/o+oD1VX7DaHhijt1bFgjvBkHBib4t49GoNDhf2NDta4oeUNlaGbSt5K7qjZ955Q=="],
+
+    "netbun": ["netbun@0.4.1", "", {}, "sha512-+m3RfwdtKHnYEZR9tSBKSvVi2pjnMfbEbW7q03Ey2fXX7wuMyW0ZLE+0C0D3svVh1tqNd3Bas73vyH5BdkgieA=="],
 
     "node-gyp-build-optional-packages": ["node-gyp-build-optional-packages@5.2.2", "", { "dependencies": { "detect-libc": "^2.0.1" }, "bin": { "node-gyp-build-optional-packages": "bin.js", "node-gyp-build-optional-packages-optional": "optional.js", "node-gyp-build-optional-packages-test": "build-test.js" } }, "sha512-s+w+rBWnpTMwSFbaE0UXsRlg7hU4FjekKU4eyAih5T8nJuNZT1nNsskXpxmeqSK9UzkBl6UgRlnKc8hz8IEqOw=="],
 
