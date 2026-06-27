@@ -2,7 +2,21 @@
 
 > **⚠️ Experimental** — This plugin is functional and tested but has not been widely used in production. Patching `globalThis.fetch` may interact unexpectedly with other plugins or future opencode versions. Use at your own risk.
 
-Routes OpenCode's outbound HTTP(S) requests through the Tor SOCKS5 proxy.
+Routes OpenCode's outbound HTTP(S) requests through a configurable SOCKS5 proxy (commonly used with the Tor network).
+
+**Disclaimer:** This is an independent, community plugin. It is **not** affiliated with, endorsed by, or maintained by The Tor Project, Inc., OpenCode, or their respective teams. Trademarks belong to their owners.
+
+## Features
+
+- Transparent SOCKS5 proxy routing for outbound OpenCode HTTP(S) requests.
+- Default-on mode so routing starts as soon as the plugin loads.
+- Reachability probe with automatic fallback to direct routing when the proxy is down.
+- Chat commands to control, inspect, and verify routing:
+  - `@tor on`, `@tor off`, `@tor status`
+  - `@tor test` — TCP reachability check
+  - `@tor verify` — compare direct vs. proxied public IP to confirm traffic is routed through the proxy
+  - `@tor proxy <url>` — change the SOCKS5 proxy URL
+- Local/private addresses bypass the proxy automatically so OpenCode's own services keep working.
 
 ## Requirements
 
