@@ -8,13 +8,18 @@ export const TorPlugin: Plugin = async ({ project, client }) => {
 
   installTorFetch(config)
 
-  await client.app.log({
-    body: {
-      service: 'opencode-tor-plugin',
-      level: 'info',
-      message: `loaded (tor ${config.enabled ? 'enabled' : 'disabled'} via ${config.proxy})`,
-    },
-  })
+  const logMessage = `loaded (tor ${config.enabled ? 'enabled' : 'disabled'} via ${config.proxy})`
+  if (client?.app?.log) {
+    await client.app.log({
+      body: {
+        service: 'opencode-tor-plugin',
+        level: 'info',
+        message: logMessage,
+      },
+    })
+  } else {
+    console.log(`[opencode-tor-plugin] ${logMessage}`)
+  }
 
   return {
     event: createCommandHandler(config, save),
